@@ -142,8 +142,27 @@ def main(topology_file):
 
     lab_file = os.path.join(EVE_LABS_DIR, f"{lab['name']}.unl")
 
+    # Step 0 — close and delete existing lab via API to release any lock
+    print("[0/3] Closing existing lab if open...")
+    import requests, urllib3
+    urllib3.disable_warnings()
+    s = requests.Session()
+    s.verify = False
+    s.post("http://192.168.0.1/api/auth/login",
+           json={"username": "admin", "password": "eve", "html5": -1})
+    # Stop all nodes first (ignore errors)
+    s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes/stop")
+    # Close the lab
+    s.delete(f"http://192.168.0.1/api/labs/{lab['name']}.unl/close")
+    # Delete the lab
+    resp = s.delete(f"http://192.168.0.1/api/labs/{lab['name']}.unl")
+    if resp.ok:
+        print(f"  Deleted existing lab.")
+    else:
+        print(f"  No existing lab found, continuing.")
+
     # Step 1 — build and write .unl file
-    print("[1/3] Building lab file...")
+    print("\n[1/3] Building lab file...")
     xml_content = build_unl_xml(lab, nodes, links)
 
     print(f"[2/3] Writing to {lab_file}...")
@@ -158,14 +177,6 @@ def main(topology_file):
 
     # Step 2 — start all nodes via API
     print("\n[3/3] Starting all nodes via EVE-NG API...")
-    import requests, urllib3
-    urllib3.disable_warnings()
-
-    s = requests.Session()
-    s.verify = False
-    s.post("http://192.168.0.1/api/auth/login",
-           json={"username": "admin", "password": "eve", "html5": -1})
-
     resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes/start")
     if resp.ok:
         print("  All nodes started.")
