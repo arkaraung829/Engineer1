@@ -70,6 +70,7 @@ def build_unl_xml(lab, nodes, links):
     # Each link becomes a bridge network connecting two interfaces
     net_id = 1
     net_map = {}   # (node_name, iface) -> network_id
+    labels  = []   # (text, canvas_x, canvas_y) for each link label
     for link in links:
         from_key  = link["from"]
         to_key    = link["to"]
@@ -84,13 +85,17 @@ def build_unl_xml(lab, nodes, links):
         mid_x = (fx + tx) // 2
         mid_y = (fy + ty) // 2
 
+        desc = link.get("description", f"Net{net_id}")
         net_elem = SubElement(networks_elem, "network")
         net_elem.set("id",         str(net_id))
         net_elem.set("type",       "bridge")
-        net_elem.set("name",       f"Net{net_id}")
+        net_elem.set("name",       desc)
         net_elem.set("left",       str(mid_x))
         net_elem.set("top",        str(mid_y))
         net_elem.set("visibility", "0")
+
+        if desc:
+            labels.append((desc, mid_x, mid_y))
         net_id += 1
 
     # Add nodes with calculated positions
@@ -127,6 +132,22 @@ def build_unl_xml(lab, nodes, links):
                 iface_elem.set("network_id", str(MGMT_NET_ID))
             elif iface_key in net_map:
                 iface_elem.set("network_id", str(net_map[iface_key]))
+
+    # Add text labels at the midpoint of each link on the canvas
+    if labels:
+        objects_elem  = SubElement(lab_elem, "objects")
+        textobjs_elem = SubElement(objects_elem, "textobjects")
+        for idx, (text, lx, ly) in enumerate(labels, 1):
+            t = SubElement(textobjs_elem, "textobject")
+            t.set("id",     str(idx))
+            t.set("name",   f"label{idx}")
+            t.set("left",   str(lx))
+            t.set("top",    str(ly - 18))
+            t.set("text",   text)
+            t.set("size",   "14")
+            t.set("bold",   "0")
+            t.set("italic", "0")
+            t.set("color",  "#000000")
 
     # Pretty print XML
     raw = tostring(lab_elem, encoding="unicode")
