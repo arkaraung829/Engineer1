@@ -23,7 +23,7 @@ eve_ng:
 
 nodes:
   - name: R1
-    type: iosv
+    type: vios
     image: vios-ADVENTERPRISEK9-M-15.8.3M2
     mgmt_ip: 192.168.0.10
     cpu: 1
@@ -31,7 +31,7 @@ nodes:
     config: configs/R1.txt
 
   - name: R2
-    type: iosv
+    type: vios
     image: vios-ADVENTERPRISEK9-M-15.8.3M2
     mgmt_ip: 192.168.0.11
     cpu: 1
@@ -39,7 +39,7 @@ nodes:
     config: configs/R2.txt
 
   - name: SW1
-    type: iosvl2
+    type: viosl2
     image: viosl2-ADVENTERPRISEK9-M-HIGH_IRON
     mgmt_ip: 192.168.0.12
     cpu: 1
@@ -47,7 +47,7 @@ nodes:
     config: configs/SW1.txt
 
   - name: SW2
-    type: iosvl2
+    type: viosl2
     image: viosl2-ADVENTERPRISEK9-M-HIGH_IRON
     mgmt_ip: 192.168.0.13
     cpu: 1
