@@ -36,12 +36,20 @@ class EveNGAPI:
         print(f"  Logged into EVE-NG as {username}")
 
     def create_lab(self, name, description=""):
-        resp = self.session.post(f"{self.base}/labs",
-                                 json={"name": name, "description": description, "version": 1})
+        payload = {
+            "name":        name,
+            "description": description,
+            "version":     "1",
+            "author":      "admin",
+            "body":        "",
+        }
+        resp = self.session.post(f"{self.base}/labs", json=payload)
         if resp.status_code == 409:
             print(f"  Lab '{name}' already exists, using it.")
             return name
-        resp.raise_for_status()
+        if not resp.ok:
+            print(f"  EVE-NG error: {resp.status_code} {resp.text}")
+            resp.raise_for_status()
         print(f"  Created lab: {name}")
         return name
 
