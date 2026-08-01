@@ -35,6 +35,11 @@ class EveNGAPI:
         resp.raise_for_status()
         print(f"  Logged into EVE-NG as {username}")
 
+    def open_lab(self, name):
+        resp = self.session.get(f"{self.base}/labs/{name}.unl")
+        resp.raise_for_status()
+        print(f"  Opened lab: {name}")
+
     def create_lab(self, name, description=""):
         payload = {
             "name":        name,
@@ -176,6 +181,9 @@ def main(topology_file):
     # Step 2 — create lab
     print(f"\n[2/4] Creating lab '{lab['name']}'...")
     api.create_lab(lab["name"], lab.get("description", ""))
+
+    # Open lab so EVE-NG allows modifications
+    api.open_lab(lab["name"])
 
     # Step 3 — add nodes
     print(f"\n[3/4] Adding nodes...")
