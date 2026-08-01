@@ -173,14 +173,6 @@ def main(topology_file):
     print("[1/4] Connecting to EVE-NG...")
     api = EveNGAPI(eve["host"], eve["username"], eve["password"])
 
-    # Step 1b — show available images for iosv and iosvl2
-    print("\n  Available IOSv images:")
-    for img in api.get_images("iosv"):
-        print(f"    {img}")
-    print("  Available IOSvL2 images:")
-    for img in api.get_images("iosvl2"):
-        print(f"    {img}")
-
     # Step 2 — create lab
     print(f"\n[2/4] Creating lab '{lab['name']}'...")
     api.create_lab(lab["name"], lab.get("description", ""))

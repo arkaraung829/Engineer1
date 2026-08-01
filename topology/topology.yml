@@ -24,7 +24,7 @@ eve_ng:
 nodes:
   - name: R1
     type: iosv
-    image: vios-adventerprisek9-m
+    image: vios-ADVENTERPRISEK9-M-15.8.3M2
     mgmt_ip: 192.168.0.10
     cpu: 1
     ram: 512
@@ -32,7 +32,7 @@ nodes:
 
   - name: R2
     type: iosv
-    image: vios-adventerprisek9-m
+    image: vios-ADVENTERPRISEK9-M-15.8.3M2
     mgmt_ip: 192.168.0.11
     cpu: 1
     ram: 512
@@ -40,7 +40,7 @@ nodes:
 
   - name: SW1
     type: iosvl2
-    image: viosl2-adventerprisek9-m
+    image: viosl2-ADVENTERPRISEK9-M-HIGH_IRON
     mgmt_ip: 192.168.0.12
     cpu: 1
     ram: 512
@@ -48,7 +48,7 @@ nodes:
 
   - name: SW2
     type: iosvl2
-    image: viosl2-adventerprisek9-m
+    image: viosl2-ADVENTERPRISEK9-M-HIGH_IRON
     mgmt_ip: 192.168.0.13
     cpu: 1
     ram: 512
