@@ -1,18 +1,100 @@
 # build-topology.py
-# Reads topology.yml and builds the lab in EVE-NG via REST API.
-# Then SSHs into each device and pushes the base config.
+# Writes EVE-NG lab file directly to disk (bypasses API locking issues).
+# Then SSHs into each device and pushes base configs.
 #
 # Usage:
 #   /opt/network-mcp/venv/bin/python3 build-topology.py topology.yml
 #
 # Requirements:
-#   pip install evengsdk pyyaml netmiko
+#   pip install pyyaml netmiko
 
 import sys
+import os
 import time
+import uuid
 import yaml
-from evengsdk.client import EvengClient
+from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.dom import minidom
 from netmiko import ConnectHandler
+
+EVE_LABS_DIR = "/opt/unetlab/labs"
+
+
+def build_unl_xml(lab, nodes, links):
+    """Build the EVE-NG .unl XML lab file content."""
+
+    lab_elem = Element("lab")
+    lab_elem.set("name",           lab["name"])
+    lab_elem.set("id",             str(uuid.uuid4()))
+    lab_elem.set("version",        "1")
+    lab_elem.set("script_timeout", "600")
+    lab_elem.set("countdown",      "0")
+    lab_elem.set("lock",           "0")
+    lab_elem.set("sat",            "-1")
+    lab_elem.set("description",    lab.get("description", ""))
+    lab_elem.set("author",         "admin")
+    lab_elem.set("body",           "")
+
+    topology = SubElement(lab_elem, "topology")
+    nodes_elem = SubElement(topology, "nodes")
+    networks_elem = SubElement(topology, "networks")
+
+    # Build network map from links
+    # Each link becomes a bridge network connecting two interfaces
+    net_id = 1
+    net_map = {}   # (node_name, iface) -> network_id
+    for link in links:
+        from_key = link["from"]
+        to_key   = link["to"]
+        net_map[from_key] = net_id
+        net_map[to_key]   = net_id
+
+        net_elem = SubElement(networks_elem, "network")
+        net_elem.set("id",         str(net_id))
+        net_elem.set("type",       "bridge")
+        net_elem.set("name",       f"Net{net_id}")
+        net_elem.set("left",       "300")
+        net_elem.set("top",        "200")
+        net_elem.set("visibility", "1")
+        net_id += 1
+
+    # Add nodes
+    for i, node in enumerate(nodes):
+        node_elem = SubElement(nodes_elem, "node")
+        node_elem.set("id",       str(i + 1))
+        node_elem.set("name",     node["name"])
+        node_elem.set("type",     "qemu")
+        node_elem.set("template", node["type"])
+        node_elem.set("image",    node["image"])
+        node_elem.set("console",  "telnet")
+        node_elem.set("cpu",      str(node.get("cpu", 1)))
+        node_elem.set("cpulimit", "0")
+        node_elem.set("ram",      str(node.get("ram", 512)))
+        node_elem.set("ethernet", "4")
+        node_elem.set("serial",   "2")
+        node_elem.set("delay",    "0")
+        node_elem.set("icon",     "Router.png")
+        node_elem.set("config",   "0")
+        node_elem.set("left",     str(100 + i * 200))
+        node_elem.set("top",      "150")
+
+        # Add interfaces
+        for iface_idx in range(4):
+            iface_key = f"{node['name']}:gi0/{iface_idx}"
+            iface_elem = SubElement(node_elem, "interface")
+            iface_elem.set("id",   str(iface_idx))
+            iface_elem.set("name", f"Gi0/{iface_idx}")
+            iface_elem.set("type", "ethernet")
+            if iface_key in net_map:
+                iface_elem.set("network_id", str(net_map[iface_key]))
+
+    # Pretty print XML
+    raw = tostring(lab_elem, encoding="unicode")
+    pretty = minidom.parseString(raw).toprettyxml(indent="  ")
+    # Remove the extra XML declaration minidom adds
+    lines = pretty.split("\n")
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + \
+           "\n".join(lines[1:])
 
 
 def push_config(node):
@@ -54,89 +136,44 @@ def main(topology_file):
     with open(topology_file, "r") as f:
         topo = yaml.safe_load(f)
 
-    eve_cfg = topo["eve_ng"]
-    lab     = topo["lab"]
-    nodes   = topo["nodes"]
-    links   = topo["links"]
+    lab   = topo["lab"]
+    nodes = topo["nodes"]
+    links = topo["links"]
 
-    # Step 1 — connect to EVE-NG
-    print("[1/4] Connecting to EVE-NG...")
-    client = EvengClient(eve_cfg["host"], log_level="ERROR", ssl_verify=False)
-    client.login(username=eve_cfg["username"], password=eve_cfg["password"])
-    print(f"  Logged in at {eve_cfg['host']}")
+    lab_file = os.path.join(EVE_LABS_DIR, f"{lab['name']}.unl")
 
-    lab_path = f"/{lab['name']}.unl"
+    # Step 1 — build and write .unl file
+    print("[1/3] Building lab file...")
+    xml_content = build_unl_xml(lab, nodes, links)
 
-    # Step 2 — create lab
-    print(f"\n[2/4] Creating lab '{lab['name']}'...")
-    try:
-        client.api.create_lab(
-            name=lab["name"],
-            path="/",
-            description=lab.get("description", ""),
-            author="admin",
-            version="1",
-            body=""
-        )
-        print(f"  Created lab: {lab['name']}")
-    except Exception as e:
-        if "already exists" in str(e) or "409" in str(e):
-            print(f"  Lab already exists, continuing.")
-        else:
-            raise
+    print(f"[2/3] Writing to {lab_file}...")
+    os.makedirs(EVE_LABS_DIR, exist_ok=True)
+    with open(lab_file, "w") as f:
+        f.write(xml_content)
 
-    # Step 3 — add nodes
-    print(f"\n[3/4] Adding nodes...")
-    for i, node in enumerate(nodes):
-        try:
-            client.api.add_node(
-                path=lab_path,
-                template=node["type"],
-                name=node["name"],
-                image=node["image"],
-                cpu=node.get("cpu", 1),
-                ram=node.get("ram", 512),
-                ethernet=4,
-                serial=2,
-                console="telnet",
-                delay=0,
-                left=100 + (i * 200),
-                top=100,
-            )
-            print(f"  Added node: {node['name']}")
-        except Exception as e:
-            if "already exists" in str(e):
-                print(f"  Node {node['name']} already exists, skipping.")
-            else:
-                print(f"  ERROR adding {node['name']}: {e}")
+    # Fix permissions so EVE-NG can read it
+    os.system(f"sudo chown www-data:www-data {lab_file}")
+    os.system(f"sudo chmod 644 {lab_file}")
+    print(f"  Lab file written OK.")
 
-    # Step 4 — wire links between nodes
-    print(f"\n[4/4] Creating links...")
-    for link in links:
-        try:
-            from_name, from_iface = link["from"].split(":")
-            to_name,   to_iface   = link["to"].split(":")
+    # Step 2 — start all nodes via API
+    print("\n[3/3] Starting all nodes via EVE-NG API...")
+    import requests, urllib3
+    urllib3.disable_warnings()
 
-            client.api.connect_node_to_node(
-                path=lab_path,
-                src=from_name,
-                src_label=from_iface,
-                dst=to_name,
-                dst_label=to_iface,
-            )
-            print(f"  Linked {link['from']} ↔ {link['to']}")
-        except Exception as e:
-            print(f"  ERROR linking {link.get('from')} ↔ {link.get('to')}: {e}")
+    s = requests.Session()
+    s.verify = False
+    s.post("http://192.168.0.1/api/auth/login",
+           json={"username": "admin", "password": "eve", "html5": -1})
 
-    # Start all nodes
-    print("\n  Starting all nodes...")
-    try:
-        client.api.start_all_nodes(path=lab_path)
+    resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes/start")
+    if resp.ok:
         print("  All nodes started.")
-    except Exception as e:
-        print(f"  ERROR starting nodes: {e}")
+    else:
+        print(f"  Start response: {resp.text[:100]}")
+        print("  → Open EVE-NG web UI and start the lab manually.")
 
-    # Wait for devices to boot
+    # Wait for boot
     print("\n  Waiting 90 seconds for devices to boot...")
     time.sleep(90)
 
@@ -148,13 +185,10 @@ def main(topology_file):
         push_config(node)
 
     print("\n================================================")
-    print(" Done! Topology is up.")
+    print(" Done!")
     print("================================================")
-    print("\nDevices:")
     for node in nodes:
         print(f"  {node['name']:6}  {node['mgmt_ip']}")
-    print("\nRun the AI agent:")
-    print("  /opt/network-mcp/venv/bin/python3 /opt/network-mcp/agent.py")
 
 
 if __name__ == "__main__":
