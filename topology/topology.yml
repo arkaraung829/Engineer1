@@ -1,0 +1,109 @@
+# topology.yml
+# Basic redundancy network for EVE-NG lab
+#
+# Topology:
+#
+#         [Internet Cloud]
+#              |        |
+#             R1        R2          ← dual routers, eBGP between them
+#           /    \   /    \
+#         SW1 ←LACP→ SW2           ← dual switches, port-channel
+#              |
+#           [VLAN10: Servers 10.0.10.0/24]
+#           [VLAN20: Management 10.0.20.0/24]
+
+lab:
+  name: redundancy-lab
+  description: Basic redundancy network — dual routers + dual switches
+
+eve_ng:
+  host: 192.168.0.1        # EVE-NG management IP (bridge)
+  username: admin
+  password: eve
+
+nodes:
+  - name: R1
+    type: iosv
+    image: vios-adventerprisek9-m
+    mgmt_ip: 192.168.0.10
+    cpu: 1
+    ram: 512
+    config: configs/R1.txt
+
+  - name: R2
+    type: iosv
+    image: vios-adventerprisek9-m
+    mgmt_ip: 192.168.0.11
+    cpu: 1
+    ram: 512
+    config: configs/R2.txt
+
+  - name: SW1
+    type: iosvl2
+    image: viosl2-adventerprisek9-m
+    mgmt_ip: 192.168.0.12
+    cpu: 1
+    ram: 512
+    config: configs/SW1.txt
+
+  - name: SW2
+    type: iosvl2
+    image: viosl2-adventerprisek9-m
+    mgmt_ip: 192.168.0.13
+    cpu: 1
+    ram: 512
+    config: configs/SW2.txt
+
+links:
+  # R1 to R2 — BGP peering link
+  - from: R1:gi0/0
+    to:   R2:gi0/0
+    description: "BGP peering R1-R2"
+
+  # R1 downlinks to switches
+  - from: R1:gi0/1
+    to:   SW1:gi0/0
+    description: "R1 to SW1 uplink"
+
+  - from: R1:gi0/2
+    to:   SW2:gi0/0
+    description: "R1 to SW2 uplink"
+
+  # R2 downlinks to switches
+  - from: R2:gi0/1
+    to:   SW1:gi0/1
+    description: "R2 to SW1 uplink"
+
+  - from: R2:gi0/2
+    to:   SW2:gi0/1
+    description: "R2 to SW2 uplink"
+
+  # SW1 to SW2 — port channel (LACP)
+  - from: SW1:gi0/2
+    to:   SW2:gi0/2
+    description: "LACP port-channel SW1-SW2 link1"
+
+  - from: SW1:gi0/3
+    to:   SW2:gi0/3
+    description: "LACP port-channel SW1-SW2 link2"
+
+networks:
+  vlans:
+    - id: 10
+      name: Servers
+      subnet: 10.0.10.0/24
+      gateway: 10.0.10.1    # R1 loopback / SVI
+
+    - id: 20
+      name: Management
+      subnet: 10.0.20.0/24
+      gateway: 10.0.20.1
+
+bgp:
+  as_r1: 65001
+  as_r2: 65002
+  r1_loopback: 1.1.1.1/32
+  r2_loopback: 2.2.2.2/32
+  peering_subnet: 10.255.0.0/30
+  r1_peering_ip: 10.255.0.1
+  r2_peering_ip: 10.255.0.2

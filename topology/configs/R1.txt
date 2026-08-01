@@ -1,0 +1,74 @@
+! R1 Base Configuration
+! Role: Primary router, BGP AS 65001
+!
+hostname R1
+!
+! Disable DNS lookup
+no ip domain-lookup
+!
+! Enable CDP
+cdp run
+!
+! Loopback — router ID
+interface Loopback0
+ ip address 1.1.1.1 255.255.255.255
+ no shutdown
+!
+! gi0/0 — BGP peering link to R2
+interface GigabitEthernet0/0
+ description BGP-PEERING-TO-R2
+ ip address 10.255.0.1 255.255.255.252
+ no shutdown
+!
+! gi0/1 — downlink to SW1
+interface GigabitEthernet0/1
+ description DOWNLINK-TO-SW1
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+!
+! gi0/2 — downlink to SW2
+interface GigabitEthernet0/2
+ description DOWNLINK-TO-SW2
+ ip address 10.0.0.5 255.255.255.252
+ no shutdown
+!
+! Management interface
+interface GigabitEthernet0/3
+ description MANAGEMENT
+ ip address 192.168.0.10 255.255.255.0
+ no shutdown
+!
+! OSPF — internal routing
+router ospf 1
+ router-id 1.1.1.1
+ network 1.1.1.1 0.0.0.0 area 0
+ network 10.0.0.0 0.0.0.3 area 0
+ network 10.0.0.4 0.0.0.3 area 0
+!
+! BGP — eBGP to R2
+router bgp 65001
+ bgp router-id 1.1.1.1
+ bgp log-neighbor-changes
+ neighbor 10.255.0.2 remote-as 65002
+ neighbor 10.255.0.2 description eBGP-TO-R2
+ !
+ address-family ipv4
+  neighbor 10.255.0.2 activate
+  network 1.1.1.1 mask 255.255.255.255
+  network 10.0.10.0 mask 255.255.255.0
+ exit-address-family
+!
+! Credentials
+username cisco privilege 15 secret cisco123
+enable secret cisco
+!
+! SSH access
+ip domain-name lab.local
+crypto key generate rsa modulus 1024
+ip ssh version 2
+!
+line vty 0 4
+ login local
+ transport input ssh
+!
+end

@@ -1,0 +1,76 @@
+! SW2 Base Configuration
+! Role: Secondary switch, STP backup
+!
+hostname SW2
+!
+no ip domain-lookup
+cdp run
+!
+! VLANs
+vlan 10
+ name Servers
+vlan 20
+ name Management
+!
+! STP — SW2 is backup (higher priority = lower preference)
+spanning-tree vlan 10,20 priority 8192
+!
+! Port-channel to SW1 (LACP)
+interface Port-channel1
+ description LACP-TO-SW1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20
+!
+interface GigabitEthernet0/2
+ description LACP-TO-SW1-LINK1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ channel-group 1 mode passive
+ no shutdown
+!
+interface GigabitEthernet0/3
+ description LACP-TO-SW1-LINK2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ channel-group 1 mode passive
+ no shutdown
+!
+! Uplinks to routers
+interface GigabitEthernet0/0
+ description UPLINK-TO-R1
+ no switchport
+ ip address 10.0.0.6 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description UPLINK-TO-R2
+ no switchport
+ ip address 10.0.0.14 255.255.255.252
+ no shutdown
+!
+! Management interface
+interface GigabitEthernet1/0
+ description MANAGEMENT
+ no switchport
+ ip address 192.168.0.13 255.255.255.0
+ no shutdown
+!
+! OSPF
+router ospf 1
+ router-id 10.0.0.6
+ network 10.0.0.4 0.0.0.3 area 0
+ network 10.0.0.12 0.0.0.3 area 0
+!
+username cisco privilege 15 secret cisco123
+enable secret cisco
+!
+ip domain-name lab.local
+crypto key generate rsa modulus 1024
+ip ssh version 2
+!
+line vty 0 4
+ login local
+ transport input ssh
+!
+end

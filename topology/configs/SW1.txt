@@ -1,0 +1,89 @@
+! SW1 Base Configuration
+! Role: Primary switch, STP root bridge
+!
+hostname SW1
+!
+no ip domain-lookup
+cdp run
+!
+! VLANs
+vlan 10
+ name Servers
+vlan 20
+ name Management
+!
+! STP — SW1 is root bridge for all VLANs
+spanning-tree vlan 10,20 priority 4096
+!
+! Port-channel to SW2 (LACP)
+interface Port-channel1
+ description LACP-TO-SW2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20
+!
+interface GigabitEthernet0/2
+ description LACP-TO-SW2-LINK1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ channel-group 1 mode active
+ no shutdown
+!
+interface GigabitEthernet0/3
+ description LACP-TO-SW2-LINK2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ channel-group 1 mode active
+ no shutdown
+!
+! Uplinks to routers (routed — no switchport)
+interface GigabitEthernet0/0
+ description UPLINK-TO-R1
+ no switchport
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description UPLINK-TO-R2
+ no switchport
+ ip address 10.0.0.10 255.255.255.252
+ no shutdown
+!
+! SVIs — default gateways for each VLAN
+interface Vlan10
+ description Servers-Gateway
+ ip address 10.0.10.1 255.255.255.0
+ no shutdown
+!
+interface Vlan20
+ description Management-Gateway
+ ip address 10.0.20.1 255.255.255.0
+ no shutdown
+!
+! Management interface
+interface GigabitEthernet1/0
+ description MANAGEMENT
+ no switchport
+ ip address 192.168.0.12 255.255.255.0
+ no shutdown
+!
+! OSPF
+router ospf 1
+ router-id 10.0.10.1
+ network 10.0.0.0 0.0.0.3 area 0
+ network 10.0.0.8 0.0.0.3 area 0
+ network 10.0.10.0 0.0.0.255 area 0
+ network 10.0.20.0 0.0.0.255 area 0
+!
+username cisco privilege 15 secret cisco123
+enable secret cisco
+!
+ip domain-name lab.local
+crypto key generate rsa modulus 1024
+ip ssh version 2
+!
+line vty 0 4
+ login local
+ transport input ssh
+!
+end
