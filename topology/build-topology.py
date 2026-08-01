@@ -54,6 +54,16 @@ class EveNGAPI:
         print(f"  Created lab: {name}")
         return name
 
+    def get_templates(self):
+        resp = self.session.get(f"{self.base}/list/templates/")
+        resp.raise_for_status()
+        return list(resp.json().get("data", {}).keys())
+
+    def get_images(self, template):
+        resp = self.session.get(f"{self.base}/list/images/{template}")
+        resp.raise_for_status()
+        return list(resp.json().get("data", {}).keys())
+
     def add_node(self, lab_name, node):
         payload = {
             "type":     "qemu",
@@ -66,12 +76,17 @@ class EveNGAPI:
             "serial":   2,
             "console":  "telnet",
             "delay":    0,
+            "left":     100,
+            "top":      100,
+            "icon":     "Router.png",
         }
         resp = self.session.post(f"{self.base}/labs/{lab_name}.unl/nodes", json=payload)
         if resp.status_code == 409:
             print(f"  Node '{node['name']}' already exists, skipping.")
             return None
-        resp.raise_for_status()
+        if not resp.ok:
+            print(f"  EVE-NG error: {resp.status_code} {resp.text}")
+            resp.raise_for_status()
         node_id = resp.json()["data"]["id"]
         print(f"  Added node: {node['name']} (id={node_id})")
         return node_id
@@ -157,6 +172,14 @@ def main(topology_file):
     # Step 1 — connect to EVE-NG
     print("[1/4] Connecting to EVE-NG...")
     api = EveNGAPI(eve["host"], eve["username"], eve["password"])
+
+    # Step 1b — show available images for iosv and iosvl2
+    print("\n  Available IOSv images:")
+    for img in api.get_images("iosv"):
+        print(f"    {img}")
+    print("  Available IOSvL2 images:")
+    for img in api.get_images("iosvl2"):
+        print(f"    {img}")
 
     # Step 2 — create lab
     print(f"\n[2/4] Creating lab '{lab['name']}'...")
