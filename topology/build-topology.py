@@ -39,6 +39,17 @@ def build_unl_xml(lab, nodes, links):
     nodes_elem = SubElement(topology, "nodes")
     networks_elem = SubElement(topology, "networks")
 
+    # Management network — pnet0 bridges devices to the GCP VM (192.168.0.0/24)
+    # This is what allows SSH from the GCP VM to each device's mgmt interface
+    MGMT_NET_ID = 0
+    mgmt_net = SubElement(networks_elem, "network")
+    mgmt_net.set("id",         "0")
+    mgmt_net.set("type",       "pnet0")
+    mgmt_net.set("name",       "Management")
+    mgmt_net.set("left",       "400")
+    mgmt_net.set("top",        "50")
+    mgmt_net.set("visibility", "1")
+
     # Build network map from links
     # Each link becomes a bridge network connecting two interfaces
     net_id = 1
@@ -53,8 +64,8 @@ def build_unl_xml(lab, nodes, links):
         net_elem.set("id",         str(net_id))
         net_elem.set("type",       "bridge")
         net_elem.set("name",       f"Net{net_id}")
-        net_elem.set("left",       "300")
-        net_elem.set("top",        "200")
+        net_elem.set("left",       str(200 + net_id * 100))
+        net_elem.set("top",        "300")
         net_elem.set("visibility", "1")
         net_id += 1
 
@@ -79,13 +90,17 @@ def build_unl_xml(lab, nodes, links):
         node_elem.set("top",      "150")
 
         # Add interfaces
+        mgmt_iface = node.get("mgmt_iface", 3)   # default: gi0/3 = management
         for iface_idx in range(4):
             iface_key = f"{node['name']}:gi0/{iface_idx}"
             iface_elem = SubElement(node_elem, "interface")
             iface_elem.set("id",   str(iface_idx))
             iface_elem.set("name", f"Gi0/{iface_idx}")
             iface_elem.set("type", "ethernet")
-            if iface_key in net_map:
+            if iface_idx == mgmt_iface:
+                # Connect management interface to pnet0 (GCP VM bridge)
+                iface_elem.set("network_id", str(MGMT_NET_ID))
+            elif iface_key in net_map:
                 iface_elem.set("network_id", str(net_map[iface_key]))
 
     # Pretty print XML
