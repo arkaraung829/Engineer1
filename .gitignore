@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets — never commit API keys
+.env
+setup-api-key.sh
+*.key
+
+# Memory — conversation history is local only
+memory/conversation.json
+
+# Reports — generated output
+reports/
+
+# Mac
+.DS_Store
+
+# Deploy folder has no jump host config — keep it but not secrets
+deploy/
