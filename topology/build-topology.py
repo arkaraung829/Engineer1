@@ -166,11 +166,10 @@ def main(topology_file):
     xml_content = build_unl_xml(lab, nodes, links)
 
     print(f"[2/3] Writing to {lab_file}...")
-    os.makedirs(EVE_LABS_DIR, exist_ok=True)
-    with open(lab_file, "w") as f:
+    tmp_file = f"/tmp/redundancy-lab.unl"
+    with open(tmp_file, "w") as f:
         f.write(xml_content)
-
-    # Fix permissions so EVE-NG can read it
+    os.system(f"sudo cp {tmp_file} {lab_file}")
     os.system(f"sudo chown www-data:www-data {lab_file}")
     os.system(f"sudo chmod 644 {lab_file}")
     print(f"  Lab file written OK.")
