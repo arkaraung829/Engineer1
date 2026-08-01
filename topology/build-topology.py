@@ -90,7 +90,7 @@ def build_unl_xml(lab, nodes, links):
         net_elem.set("name",       f"Net{net_id}")
         net_elem.set("left",       str(mid_x))
         net_elem.set("top",        str(mid_y))
-        net_elem.set("visibility", "1")
+        net_elem.set("visibility", "0")
         net_id += 1
 
     # Add nodes with calculated positions
