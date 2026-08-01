@@ -13,6 +13,11 @@ echo "[0/3] Fixing file permissions..."
 sudo chown -R $(whoami):$(whoami) /opt/network-mcp/
 echo "  Permissions set for $(whoami)."
 
+# Step 0b — Install any missing Python packages
+echo ""
+echo "[0b/3] Checking Python packages..."
+/opt/network-mcp/venv/bin/pip install requests pyyaml netmiko fastmcp -q && echo "  Packages OK."
+
 # Step 1 — Set bridge IP so router is reachable
 echo ""
 echo "[1/3] Setting bridge IP 192.168.0.1 on vnet0_1..."
