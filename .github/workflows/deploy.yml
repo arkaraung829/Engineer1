@@ -19,7 +19,7 @@ jobs:
           host: ${{ secrets.GCP_VM_IP }}
           username: ${{ secrets.GCP_VM_USER }}
           key: ${{ secrets.GCP_SSH_KEY }}
-          source: "agent.py,tools.py,simulator.py,prompts/,startup.sh,mcp/"
+          source: "agent.py,tools.py,simulator.py,prompts/,startup.sh,mcp/,topology/"
           target: /opt/network-mcp/
 
       - name: Restart MCP server
