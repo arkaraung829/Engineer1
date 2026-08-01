@@ -196,6 +196,8 @@ def main(topology_file):
     s.delete(f"http://192.168.0.1/api/labs/{lab['name']}.unl/close")
     # Delete the lab
     resp = s.delete(f"http://192.168.0.1/api/labs/{lab['name']}.unl")
+    # Remove stale lock file if exists
+    os.system(f"sudo rm -f {EVE_LABS_DIR}/{lab['name']}.unl.lock")
     if resp.ok:
         print(f"  Deleted existing lab.")
     else:
@@ -214,14 +216,19 @@ def main(topology_file):
     os.system(f"sudo chmod 644 {lab_file}")
     print(f"  Lab file written OK.")
 
-    # Step 2 — open lab so EVE-NG loads it into memory
+    # Step 2 — remove stale lock and start nodes
     print("\n[3/3] Loading lab into EVE-NG...")
-    resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl")
+    os.system(f"sudo rm -f {EVE_LABS_DIR}/{lab['name']}.unl.lock")
+    s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl")
+    r = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes/start")
+    msg = r.json().get("message", "")
+    if "started" in msg.lower():
+        print(f"  All nodes started.")
+    else:
+        print(f"  Start result: {msg}")
     nodes_resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes")
     node_count = len(nodes_resp.json().get("data", {}))
-    print(f"  Lab loaded. {node_count} nodes found.")
-    print(f"\n  ACTION REQUIRED: Open http://192.168.0.1 in browser")
-    print(f"  → Open '{lab['name']}' lab → right-click canvas → Start all nodes")
+    print(f"  {node_count} nodes in lab.")
 
     # Wait for boot
     print("\n  Waiting 90 seconds for devices to boot...")
