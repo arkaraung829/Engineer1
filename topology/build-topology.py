@@ -50,29 +50,53 @@ def build_unl_xml(lab, nodes, links):
     mgmt_net.set("top",        "50")
     mgmt_net.set("visibility", "1")
 
+    # Node positions — routers top row, switches bottom row
+    node_positions = {}
+    routers  = [n for n in nodes if n["type"] == "vios"]
+    switches = [n for n in nodes if n["type"] == "viosl2"]
+    router_spacing  = 400
+    switch_spacing  = 400
+    router_start_x  = 200
+    switch_start_x  = 200
+    router_y        = 150
+    switch_y        = 450
+
+    for i, n in enumerate(routers):
+        node_positions[n["name"]] = (router_start_x + i * router_spacing, router_y)
+    for i, n in enumerate(switches):
+        node_positions[n["name"]] = (switch_start_x + i * switch_spacing, switch_y)
+
     # Build network map from links
     # Each link becomes a bridge network connecting two interfaces
     net_id = 1
     net_map = {}   # (node_name, iface) -> network_id
     for link in links:
-        from_key = link["from"]
-        to_key   = link["to"]
+        from_key  = link["from"]
+        to_key    = link["to"]
+        from_name = from_key.split(":")[0]
+        to_name   = to_key.split(":")[0]
         net_map[from_key] = net_id
         net_map[to_key]   = net_id
+
+        # Position network at midpoint between the two connected nodes
+        fx, fy = node_positions.get(from_name, (300, 300))
+        tx, ty = node_positions.get(to_name,   (300, 300))
+        mid_x = (fx + tx) // 2
+        mid_y = (fy + ty) // 2
 
         net_elem = SubElement(networks_elem, "network")
         net_elem.set("id",         str(net_id))
         net_elem.set("type",       "bridge")
         net_elem.set("name",       f"Net{net_id}")
-        net_elem.set("left",       str(200 + net_id * 100))
-        net_elem.set("top",        "300")
+        net_elem.set("left",       str(mid_x))
+        net_elem.set("top",        str(mid_y))
         net_elem.set("visibility", "1")
         net_id += 1
 
-    # Add nodes
-    for i, node in enumerate(nodes):
+    # Add nodes with calculated positions
+    for node in nodes:
         node_elem = SubElement(nodes_elem, "node")
-        node_elem.set("id",       str(i + 1))
+        node_elem.set("id",       str(nodes.index(node) + 1))
         node_elem.set("name",     node["name"])
         node_elem.set("type",     "qemu")
         node_elem.set("template", node["type"])
@@ -86,8 +110,9 @@ def build_unl_xml(lab, nodes, links):
         node_elem.set("delay",    "0")
         node_elem.set("icon",     "Router.png")
         node_elem.set("config",   "0")
-        node_elem.set("left",     str(100 + i * 200))
-        node_elem.set("top",      "150")
+        px, py = node_positions.get(node["name"], (100, 150))
+        node_elem.set("left",     str(px))
+        node_elem.set("top",      str(py))
 
         # Add interfaces
         mgmt_iface = node.get("mgmt_iface", 3)   # default: gi0/3 = management
