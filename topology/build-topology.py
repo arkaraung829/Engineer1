@@ -63,7 +63,7 @@ def main(topology_file):
     print("[1/4] Connecting to EVE-NG...")
     client = EvengClient(eve_cfg["host"], log_level="ERROR", ssl_verify=False)
     client.login(username=eve_cfg["username"], password=eve_cfg["password"])
-    print(f"  Logged into EVE-NG at {eve_cfg['host']}")
+    print(f"  Logged in at {eve_cfg['host']}")
 
     lab_path = f"/{lab['name']}.unl"
 
@@ -87,65 +87,43 @@ def main(topology_file):
 
     # Step 3 — add nodes
     print(f"\n[3/4] Adding nodes...")
-    node_ids = {}
     for i, node in enumerate(nodes):
         try:
-            result = client.api.add_lab_node(
+            client.api.add_node(
                 path=lab_path,
-                node_type="qemu",
                 template=node["type"],
-                image=node["image"],
                 name=node["name"],
+                image=node["image"],
                 cpu=node.get("cpu", 1),
                 ram=node.get("ram", 512),
                 ethernet=4,
                 serial=2,
                 console="telnet",
                 delay=0,
-                left=100 + (i * 150),
+                left=100 + (i * 200),
                 top=100,
             )
-            node_id = result.get("id") or result.get("data", {}).get("id")
-            node_ids[node["name"]] = node_id
-            print(f"  Added node: {node['name']} (id={node_id})")
+            print(f"  Added node: {node['name']}")
         except Exception as e:
             if "already exists" in str(e):
                 print(f"  Node {node['name']} already exists, skipping.")
             else:
                 print(f"  ERROR adding {node['name']}: {e}")
 
-    # Step 4 — create networks and wire links
+    # Step 4 — wire links between nodes
     print(f"\n[4/4] Creating links...")
     for link in links:
         try:
             from_name, from_iface = link["from"].split(":")
             to_name,   to_iface   = link["to"].split(":")
 
-            # Create a point-to-point network for this link
-            net_name = f"{from_name}-{to_name}"
-            net_result = client.api.add_lab_network(
+            client.api.connect_node_to_node(
                 path=lab_path,
-                network_type="bridge",
-                name=net_name,
+                src=from_name,
+                src_label=from_iface,
+                dst=to_name,
+                dst_label=to_iface,
             )
-            net_id = net_result.get("id") or net_result.get("data", {}).get("id")
-
-            # Connect both nodes to this network
-            from_id  = node_ids.get(from_name)
-            to_id    = node_ids.get(to_name)
-            from_idx = int(from_iface.replace("gi0/", ""))
-            to_idx   = int(to_iface.replace("gi0/", ""))
-
-            if from_id:
-                client.api.connect_node_to_cloud(
-                    path=lab_path, node_id=from_id,
-                    interface_id=from_idx, network_id=net_id
-                )
-            if to_id:
-                client.api.connect_node_to_cloud(
-                    path=lab_path, node_id=to_id,
-                    interface_id=to_idx, network_id=net_id
-                )
             print(f"  Linked {link['from']} ↔ {link['to']}")
         except Exception as e:
             print(f"  ERROR linking {link.get('from')} ↔ {link.get('to')}: {e}")
@@ -153,7 +131,7 @@ def main(topology_file):
     # Start all nodes
     print("\n  Starting all nodes...")
     try:
-        client.api.start_all_lab_nodes(path=lab_path)
+        client.api.start_all_nodes(path=lab_path)
         print("  All nodes started.")
     except Exception as e:
         print(f"  ERROR starting nodes: {e}")
