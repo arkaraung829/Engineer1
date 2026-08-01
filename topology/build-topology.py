@@ -38,6 +38,7 @@ class EveNGAPI:
     def create_lab(self, name, description=""):
         payload = {
             "name":        name,
+            "path":        "/",
             "description": description,
             "version":     "1",
             "author":      "admin",
