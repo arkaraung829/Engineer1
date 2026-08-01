@@ -174,14 +174,14 @@ def main(topology_file):
     os.system(f"sudo chmod 644 {lab_file}")
     print(f"  Lab file written OK.")
 
-    # Step 2 — start all nodes via API
-    print("\n[3/3] Starting all nodes via EVE-NG API...")
-    resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes/start")
-    if resp.ok:
-        print("  All nodes started.")
-    else:
-        print(f"  Start response: {resp.text[:100]}")
-        print("  → Open EVE-NG web UI and start the lab manually.")
+    # Step 2 — open lab so EVE-NG loads it into memory
+    print("\n[3/3] Loading lab into EVE-NG...")
+    resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl")
+    nodes_resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes")
+    node_count = len(nodes_resp.json().get("data", {}))
+    print(f"  Lab loaded. {node_count} nodes found.")
+    print(f"\n  ACTION REQUIRED: Open http://192.168.0.1 in browser")
+    print(f"  → Open '{lab['name']}' lab → right-click canvas → Start all nodes")
 
     # Wait for boot
     print("\n  Waiting 90 seconds for devices to boot...")
