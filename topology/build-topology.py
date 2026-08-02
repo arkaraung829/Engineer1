@@ -85,18 +85,6 @@ def build_unl_xml(lab, nodes, links):
     nodes_elem = SubElement(topology, "nodes")
     networks_elem = SubElement(topology, "networks")
 
-    # Management network — pnet0 bridges devices to the GCP VM (192.168.0.0/24)
-    # This is what allows SSH from the GCP VM to each device's mgmt interface.
-    # Must NOT be id 0: EVE-NG treats network_id=0 as "interface disconnected".
-    MGMT_NET_ID = 100
-    mgmt_net = SubElement(networks_elem, "network")
-    mgmt_net.set("id",         str(MGMT_NET_ID))
-    mgmt_net.set("type",       "pnet0")
-    mgmt_net.set("name",       "Management")
-    mgmt_net.set("left",       "400")
-    mgmt_net.set("top",        "50")
-    mgmt_net.set("visibility", "1")
-
     # Node positions — routers top row, switches bottom row
     node_positions = {}
     routers  = [n for n in nodes if n["type"] == "vios"]
@@ -146,6 +134,19 @@ def build_unl_xml(lab, nodes, links):
         net_id += 1
 
     labels = place_labels(labels)
+
+    # Management network — pnet0 bridges devices to the GCP VM (192.168.0.0/24).
+    # This is what allows SSH from the GCP VM to each device's mgmt interface.
+    # Numbered sequentially after the link networks — EVE-NG rejects id 0
+    # (means "disconnected") and mishandles out-of-sequence ids.
+    MGMT_NET_ID = net_id
+    mgmt_net = SubElement(networks_elem, "network")
+    mgmt_net.set("id",         str(MGMT_NET_ID))
+    mgmt_net.set("type",       "pnet0")
+    mgmt_net.set("name",       "Management")
+    mgmt_net.set("left",       "400")
+    mgmt_net.set("top",        "50")
+    mgmt_net.set("visibility", "1")
 
     # Add nodes with calculated positions
     for node in nodes:
