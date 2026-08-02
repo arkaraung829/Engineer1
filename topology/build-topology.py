@@ -133,21 +133,24 @@ def build_unl_xml(lab, nodes, links):
             elif iface_key in net_map:
                 iface_elem.set("network_id", str(net_map[iface_key]))
 
-    # Add text labels at the midpoint of each link on the canvas
+    # Add text labels at the midpoint of each link on the canvas.
+    # EVE-NG textobject format: type="text" with a <data> child element
+    # containing HTML with inline CSS that encodes position and style.
     if labels:
         objects_elem  = SubElement(lab_elem, "objects")
         textobjs_elem = SubElement(objects_elem, "textobjects")
         for idx, (text, lx, ly) in enumerate(labels, 1):
             t = SubElement(textobjs_elem, "textobject")
-            t.set("id",     str(idx))
-            t.set("name",   f"label{idx}")
-            t.set("left",   str(lx))
-            t.set("top",    str(ly - 18))
-            t.set("text",   text)
-            t.set("size",   "14")
-            t.set("bold",   "0")
-            t.set("italic", "0")
-            t.set("color",  "#000000")
+            t.set("id",   str(idx))
+            t.set("name", text[:30])
+            t.set("type", "text")
+            data_elem = SubElement(t, "data")
+            data_elem.text = (
+                f'<div style="top:{ly - 18}px;left:{lx}px;z-index:1000;">'
+                f'<p style="color:#000000;font-weight:bold;'
+                f'background-color:transparent;font-size:14px;">'
+                f'{text}</p></div>'
+            )
 
     # Pretty print XML
     raw = tostring(lab_elem, encoding="unicode")
