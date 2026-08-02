@@ -213,8 +213,14 @@ def build_unl_xml(lab, nodes, links):
             t.set("name", text[:30])
             t.set("type", "text")
             data_elem = SubElement(t, "data")
+            # class="customShape context-menu" + data-path make the UI
+            # attach its drag and right-click handlers, same as labels
+            # created in the GUI — without them the label is static HTML
             data_elem.text = (
-                f'<div id="customText{idx}" style="top:{ly}px;left:{lx}px;z-index:1000;">'
+                f'<div id="customText{idx}" class="customShape customText '
+                f'context-menu" data-path="{idx}" '
+                f'style="position:absolute;top:{ly}px;left:{lx}px;'
+                f'cursor:move;z-index:1000;">'
                 f'<p style="color:#000000;font-weight:bold;'
                 f'background-color:transparent;font-size:14px;">'
                 f'{text}</p></div>'
