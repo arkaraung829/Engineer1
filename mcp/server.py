@@ -111,16 +111,56 @@ def lab_down() -> str:
 @mcp.tool()
 def lab_status() -> str:
     """
-    Show the progress/output of the most recent lab_up or lab_down run.
-    The lab is fully up when the output shows all four devices
-    (192.168.0.10-13) answering SSH and prints the VM IP.
+    Report the REAL lab state: GCP VM status and external IP, whether
+    each Cisco device (192.168.0.10-13) answers SSH, and the tail of the
+    most recent lab_up/lab_down output. Works no matter how the lab was
+    started (Claude Desktop, terminal, GCP console).
     """
+    lines = []
+
+    # VM state straight from GCP — not from any local log
+    vm_status, vm_ip = "", ""
+    try:
+        r = subprocess.run(
+            ["gcloud", "compute", "instances", "list",
+             "--filter=name=eve-ng-lab",
+             "--format=value(status,networkInterfaces[0].accessConfigs[0].natIP)"],
+            capture_output=True, text=True, env=SCRIPT_ENV, timeout=30)
+        parts = r.stdout.strip().split("\t") if r.stdout.strip() else []
+        vm_status = parts[0] if parts else ""
+        vm_ip = parts[1] if len(parts) > 1 else ""
+    except Exception as e:
+        lines.append(f"gcloud check failed: {e}")
+
+    if vm_status:
+        lines.append(f"VM eve-ng-lab: {vm_status}"
+                     + (f" at {vm_ip}" if vm_ip else ""))
+    else:
+        lines.append("VM eve-ng-lab: not found or gcloud not authed")
+
+    # If the VM is up, probe each device's SSH port through it
+    if vm_status == "RUNNING" and vm_ip:
+        probe = ('for d in 10 11 12 13; do '
+                 '(echo > /dev/tcp/192.168.0.$d/22) 2>/dev/null '
+                 '&& echo "192.168.0.$d up" || echo "192.168.0.$d DOWN"; done')
+        try:
+            r2 = subprocess.run(
+                ["ssh", "-i", os.path.expanduser("~/.ssh/google_compute_engine"),
+                 "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+                 "-o", "ConnectTimeout=5", f"ayethandaraung@{vm_ip}", probe],
+                capture_output=True, text=True, timeout=40)
+            lines.append("Devices:\n" + (r2.stdout.strip() or r2.stderr.strip()))
+        except Exception as e:
+            lines.append(f"device probe failed: {e}")
+        lines.append(f"JUMP_HOST for this Mac: {vm_ip}")
+
     try:
         with open(LAB_LOG, "r") as f:
-            output = f.read()
+            lines.append("--- last lab_up/lab_down output ---\n" + f.read()[-1000:])
     except FileNotFoundError:
-        return "No lab_up/lab_down has been run since this server started."
-    return output[-3000:] or "(script started, no output yet — check again shortly)"
+        pass
+
+    return "\n\n".join(lines)
 
 
 # ─────────────────────────────────────────────
