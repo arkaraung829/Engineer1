@@ -12,9 +12,6 @@ setup-api-key.sh
 # Memory — conversation history is local only
 memory/conversation.json
 
-# Reports — generated output
-reports/
-
 # Mac
 .DS_Store
 
