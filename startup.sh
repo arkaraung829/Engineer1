@@ -30,9 +30,29 @@ curl -s -c "$COOKIES" -X POST -H "Content-Type: application/json" \
      -d '{"username":"admin","password":"eve","html5":-1}' \
      "$EVE_API/api/auth/login" > /dev/null
 sudo rm -f "/opt/unetlab/labs/$LAB.unl.lock"
-START_MSG=$(curl -s -b "$COOKIES" "$EVE_API/api/labs/$LAB.unl/nodes/start" \
-            | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
-echo "  ${START_MSG:-start request sent}"
+
+# Reboot recovery: EVE's per-node state in /opt/unetlab/tmp survives a VM
+# reboot on disk, but its bind-mounts (chroot jail, qemu dirs) do not.
+# EVE then sees the .prepared marker, skips re-mounting, and nodes die
+# instantly at start while the API still reports success. If no node is
+# running, that state is stale — wipe it so EVE re-prepares everything.
+# Devices lose nothing: they boot from the startup-configs in the .unl.
+if ! pgrep -f qemu-system > /dev/null; then
+    echo "  No nodes running — clearing stale node state (post-reboot)."
+    sudo rm -rf /opt/unetlab/tmp/0
+fi
+
+# Start nodes one by one — the bulk nodes/start endpoint can report
+# success without actually starting anything when node state is stale.
+NODE_IDS=$(curl -s -b "$COOKIES" "$EVE_API/api/labs/$LAB.unl/nodes" \
+           | python3 -c "import json,sys; print(' '.join(json.load(sys.stdin)['data'].keys()))" \
+           2>/dev/null)
+for id in ${NODE_IDS:-1 2 3 4}; do
+    MSG=$(curl -s -b "$COOKIES" "$EVE_API/api/labs/$LAB.unl/nodes/$id/start" \
+          | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+    echo "  node $id: ${MSG:-start requested}"
+    sleep 2
+done
 
 # Step 2 — Wait for the management bridge, then give the host its IP
 echo ""
