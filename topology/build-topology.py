@@ -243,13 +243,15 @@ def verify_ssh(node, attempts=4, wait=30):
         "timeout":     20,
     }
 
+    last_error = None
     for attempt in range(1, attempts + 1):
         try:
             with ConnectHandler(**device) as conn:
                 hostname = conn.find_prompt().strip("#>")
             print(f"  {node['name']:6} {node['mgmt_ip']:15} SSH OK (prompt: {hostname})")
             return True
-        except Exception:
+        except Exception as e:
+            last_error = e
             if attempt < attempts:
                 print(f"  {node['name']:6} not ready (attempt {attempt}/{attempts}), "
                       f"retrying in {wait}s...")
@@ -257,6 +259,7 @@ def verify_ssh(node, attempts=4, wait=30):
 
     print(f"  {node['name']:6} {node['mgmt_ip']:15} SSH FAILED — "
           f"check the node console in EVE-NG")
+    print(f"         last error: {type(last_error).__name__}: {last_error}")
     return False
 
 
