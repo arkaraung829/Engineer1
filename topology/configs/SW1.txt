@@ -26,6 +26,7 @@ interface GigabitEthernet0/2
  description LACP-TO-SW2-LINK1
  switchport trunk encapsulation dot1q
  switchport mode trunk
+ switchport trunk allowed vlan 10,20
  channel-group 1 mode active
  no shutdown
 !
@@ -33,6 +34,7 @@ interface GigabitEthernet0/3
  description LACP-TO-SW2-LINK2
  switchport trunk encapsulation dot1q
  switchport mode trunk
+ switchport trunk allowed vlan 10,20
  channel-group 1 mode active
  no shutdown
 !
