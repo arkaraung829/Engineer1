@@ -38,12 +38,16 @@ nodes:
     ram: 512
     config: configs/R2.txt
 
+  # Switches need a 2nd port module: Gi0/0-3 for links, Gi1/0 (index 4) for mgmt.
+  # Without this, mgmt defaults to index 3 and steals Gi0/3 from LACP link2.
   - name: SW1
     type: viosl2
     image: viosl2-ADVENTERPRISEK9-M-HIGH_IRON
     mgmt_ip: 192.168.0.12
     cpu: 1
     ram: 512
+    ethernet: 8
+    mgmt_iface: 4
     config: configs/SW1.txt
 
   - name: SW2
@@ -52,6 +56,8 @@ nodes:
     mgmt_ip: 192.168.0.13
     cpu: 1
     ram: 512
+    ethernet: 8
+    mgmt_iface: 4
     config: configs/SW2.txt
 
 links:

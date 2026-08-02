@@ -12,12 +12,58 @@ import sys
 import os
 import time
 import uuid
+import base64
 import yaml
 from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.dom import minidom
 from netmiko import ConnectHandler
 
 EVE_LABS_DIR = "/opt/unetlab/labs"
+
+# Approximate rendered size of a label (14px bold font) for overlap checks
+CHAR_W   = 8
+LABEL_H  = 24
+
+
+def place_labels(links_with_desc):
+    """Compute a non-overlapping canvas position for each link label.
+
+    Labels start at the link midpoint, centered on the link and nudged
+    off the line (above for horizontal links, beside for vertical ones).
+    If a label would overlap one already placed — e.g. the two crossing
+    diagonals share the same midpoint, and parallel links between the
+    same pair of nodes do too — it is pushed down until it fits.
+    """
+    placed = []   # (text, left, top, width)
+    for text, fx, fy, tx, ty in links_with_desc:
+        width = len(text) * CHAR_W
+        mid_x = (fx + tx) // 2
+        mid_y = (fy + ty) // 2
+
+        if abs(tx - fx) >= abs(ty - fy):
+            # Mostly horizontal link: center text on it, lift above the line.
+            # On collision keep moving up so labels never land on the line.
+            lx = mid_x - width // 2
+            ly = mid_y - LABEL_H - 6
+            step = -(LABEL_H + 4)
+        else:
+            # Mostly vertical link: put text just right of the line
+            lx = mid_x + 12
+            ly = mid_y - LABEL_H // 2
+            step = LABEL_H + 4
+
+        def collides(x, y):
+            for _, px, py, pw in placed:
+                if x < px + pw and px < x + width and abs(y - py) < LABEL_H:
+                    return True
+            return False
+
+        while collides(lx, ly):
+            ly += step
+
+        placed.append((text, lx, ly, width))
+
+    return [(text, lx, ly) for text, lx, ly, _ in placed]
 
 
 def build_unl_xml(lab, nodes, links):
@@ -95,8 +141,10 @@ def build_unl_xml(lab, nodes, links):
         net_elem.set("visibility", "0")
 
         if desc:
-            labels.append((desc, mid_x, mid_y))
+            labels.append((desc, fx, fy, tx, ty))
         net_id += 1
+
+    labels = place_labels(labels)
 
     # Add nodes with calculated positions
     for node in nodes:
@@ -110,22 +158,26 @@ def build_unl_xml(lab, nodes, links):
         node_elem.set("cpu",      str(node.get("cpu", 1)))
         node_elem.set("cpulimit", "0")
         node_elem.set("ram",      str(node.get("ram", 512)))
-        node_elem.set("ethernet", "4")
+        ethernet = node.get("ethernet", 4)
+        node_elem.set("ethernet", str(ethernet))
         node_elem.set("serial",   "2")
         node_elem.set("delay",    "0")
         node_elem.set("icon",     "Router.png")
-        node_elem.set("config",   "0")
+        # config="1" tells EVE-NG to inject the startup-config (embedded
+        # below in <objects><configs>) when the node boots fresh
+        node_elem.set("config",   "1" if node.get("config") else "0")
         px, py = node_positions.get(node["name"], (100, 150))
         node_elem.set("left",     str(px))
         node_elem.set("top",      str(py))
 
-        # Add interfaces
-        mgmt_iface = node.get("mgmt_iface", 3)   # default: gi0/3 = management
-        for iface_idx in range(4):
-            iface_key = f"{node['name']}:gi0/{iface_idx}"
+        # Add interfaces — vIOS names ports in modules of 4 (Gi0/0-3, Gi1/0-3)
+        mgmt_iface = node.get("mgmt_iface", 3)   # interface index used for management
+        for iface_idx in range(ethernet):
+            iface_name = f"gi{iface_idx // 4}/{iface_idx % 4}"
+            iface_key = f"{node['name']}:{iface_name}"
             iface_elem = SubElement(node_elem, "interface")
             iface_elem.set("id",   str(iface_idx))
-            iface_elem.set("name", f"Gi0/{iface_idx}")
+            iface_elem.set("name", iface_name.capitalize())
             iface_elem.set("type", "ethernet")
             if iface_idx == mgmt_iface:
                 # Connect management interface to pnet0 (GCP VM bridge)
@@ -133,11 +185,25 @@ def build_unl_xml(lab, nodes, links):
             elif iface_key in net_map:
                 iface_elem.set("network_id", str(net_map[iface_key]))
 
+    objects_elem = SubElement(lab_elem, "objects")
+
+    # Embed startup-configs (base64) so devices boot fully configured.
+    # This replaces pushing configs over SSH, which can't work on a fresh
+    # lab: a blank device has no mgmt IP or SSH to connect to.
+    configs_elem = SubElement(objects_elem, "configs")
+    for node in nodes:
+        config_file = node.get("config")
+        if not config_file:
+            continue
+        with open(config_file, "r") as f:
+            cfg_elem = SubElement(configs_elem, "config")
+            cfg_elem.set("id", str(nodes.index(node) + 1))
+            cfg_elem.text = base64.b64encode(f.read().encode()).decode()
+
     # Add text labels at the midpoint of each link on the canvas.
     # EVE-NG textobject format: type="text" with a <data> child element
     # containing HTML with inline CSS that encodes position and style.
     if labels:
-        objects_elem  = SubElement(lab_elem, "objects")
         textobjs_elem = SubElement(objects_elem, "textobjects")
         for idx, (text, lx, ly) in enumerate(labels, 1):
             t = SubElement(textobjs_elem, "textobject")
@@ -146,7 +212,7 @@ def build_unl_xml(lab, nodes, links):
             t.set("type", "text")
             data_elem = SubElement(t, "data")
             data_elem.text = (
-                f'<div id="customText{idx}" style="top:{ly - 18}px;left:{lx}px;z-index:1000;">'
+                f'<div id="customText{idx}" style="top:{ly}px;left:{lx}px;z-index:1000;">'
                 f'<p style="color:#000000;font-weight:bold;'
                 f'background-color:transparent;font-size:14px;">'
                 f'{text}</p></div>'
@@ -161,17 +227,12 @@ def build_unl_xml(lab, nodes, links):
            "\n".join(lines[1:])
 
 
-def push_config(node):
-    """SSH into device and push base config."""
-    config_file = node.get("config")
-    if not config_file:
-        return
-
-    print(f"\n  Pushing config to {node['name']} ({node['mgmt_ip']})...")
-
-    with open(config_file, "r") as f:
-        commands = [line.rstrip() for line in f
-                    if line.strip() and not line.startswith("!")]
+def verify_ssh(node, attempts=4, wait=30):
+    """Confirm the booted device came up with its startup-config by
+    logging in over SSH. Retries because RSA key generation and OSPF/BGP
+    startup can lag the boot by a minute or two."""
+    if not node.get("config"):
+        return True
 
     device = {
         "device_type": "cisco_ios",
@@ -179,17 +240,24 @@ def push_config(node):
         "username":    "cisco",
         "password":    "cisco123",
         "secret":      "cisco",
-        "timeout":     30,
+        "timeout":     20,
     }
 
-    try:
-        with ConnectHandler(**device) as conn:
-            conn.enable()
-            conn.send_config_set(commands)
-            conn.save_config()
-        print(f"  Config pushed to {node['name']} OK")
-    except Exception as e:
-        print(f"  ERROR pushing config to {node['name']}: {e}")
+    for attempt in range(1, attempts + 1):
+        try:
+            with ConnectHandler(**device) as conn:
+                hostname = conn.find_prompt().strip("#>")
+            print(f"  {node['name']:6} {node['mgmt_ip']:15} SSH OK (prompt: {hostname})")
+            return True
+        except Exception:
+            if attempt < attempts:
+                print(f"  {node['name']:6} not ready (attempt {attempt}/{attempts}), "
+                      f"retrying in {wait}s...")
+                time.sleep(wait)
+
+    print(f"  {node['name']:6} {node['mgmt_ip']:15} SSH FAILED — "
+          f"check the node console in EVE-NG")
+    return False
 
 
 def main(topology_file):
@@ -254,16 +322,16 @@ def main(topology_file):
     node_count = len(nodes_resp.json().get("data", {}))
     print(f"  {node_count} nodes in lab.")
 
-    # Wait for boot
-    print("\n  Waiting 90 seconds for devices to boot...")
+    # Wait for boot — startup-configs are applied by EVE-NG during boot
+    print("\n  Waiting 90 seconds for devices to boot with startup-configs...")
     time.sleep(90)
 
-    # Push configs
+    # Verify each device is reachable over SSH (proves config loaded)
     print("\n================================================")
-    print(" Pushing base configs via SSH")
+    print(" Verifying SSH access")
     print("================================================")
     for node in nodes:
-        push_config(node)
+        verify_ssh(node)
 
     print("\n================================================")
     print(" Done!")
