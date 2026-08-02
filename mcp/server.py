@@ -59,6 +59,71 @@ def write_report(content: str, filename: str = "") -> str:
 
 
 # ─────────────────────────────────────────────
+# TOOLS 3-5: Lab lifecycle — start/stop the GCP lab from Claude Desktop
+# ─────────────────────────────────────────────
+# These run the repo's scripts on the Mac in the background (bring-up
+# takes ~5 min) and log to a file so lab_status() can report progress.
+import subprocess
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LAB_LOG = "/tmp/network-lab-lifecycle.log"
+
+# Claude Desktop launches this server with a minimal environment —
+# make sure the scripts can find gcloud (/opt/homebrew/bin wrapper)
+SCRIPT_ENV = {**os.environ,
+              "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"}
+
+
+def _run_script_in_background(script: str) -> None:
+    log = open(LAB_LOG, "w")
+    subprocess.Popen(
+        ["bash", os.path.join(REPO_ROOT, "scripts", script)],
+        stdout=log, stderr=subprocess.STDOUT, env=SCRIPT_ENV,
+    )
+
+
+@mcp.tool()
+def lab_up() -> str:
+    """
+    Start the GCP VM and boot the whole EVE-NG lab (4 Cisco devices).
+    Runs in the background and takes about 5 minutes.
+    Call lab_status() to watch progress; the final output includes the
+    VM's new external IP (needed as JUMP_HOST to reach devices from
+    this Mac).
+    """
+    _run_script_in_background("lab-up.sh")
+    return ("Lab bring-up started in the background (~5 min: VM start, "
+            "code sync, device boot). Call lab_status() to check progress.")
+
+
+@mcp.tool()
+def lab_down() -> str:
+    """
+    Gracefully shut the lab down: stops the Cisco devices first (saves
+    their state), then stops the GCP VM so compute billing pauses.
+    Runs in the background; call lab_status() to confirm completion.
+    """
+    _run_script_in_background("lab-down.sh")
+    return ("Lab shutdown started in the background (~1 min). "
+            "Call lab_status() to confirm.")
+
+
+@mcp.tool()
+def lab_status() -> str:
+    """
+    Show the progress/output of the most recent lab_up or lab_down run.
+    The lab is fully up when the output shows all four devices
+    (192.168.0.10-13) answering SSH and prints the VM IP.
+    """
+    try:
+        with open(LAB_LOG, "r") as f:
+            output = f.read()
+    except FileNotFoundError:
+        return "No lab_up/lab_down has been run since this server started."
+    return output[-3000:] or "(script started, no output yet — check again shortly)"
+
+
+# ─────────────────────────────────────────────
 # START THE SERVER
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
