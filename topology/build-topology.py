@@ -20,6 +20,14 @@ from netmiko import ConnectHandler
 
 EVE_LABS_DIR = "/opt/unetlab/labs"
 
+# Management network — a plain bridge with id 1. EVE-NG creates it on the
+# host as vnet0_1 when nodes start; the host holds 192.168.0.1/24 on it,
+# which is what lets the VM SSH into each device's mgmt interface.
+# (This install has no pnet0-9 bridges, so type "pnet0" is invalid here —
+# EVE silently drops such networks and nodes fail with error 10.)
+MGMT_NET_ID = 1
+MGMT_BRIDGE = f"vnet0_{MGMT_NET_ID}"
+
 # Approximate rendered size of a label (14px bold font) for overlap checks
 CHAR_W   = 8
 LABEL_H  = 24
@@ -101,9 +109,17 @@ def build_unl_xml(lab, nodes, links):
     for i, n in enumerate(switches):
         node_positions[n["name"]] = (switch_start_x + i * switch_spacing, switch_y)
 
+    mgmt_net = SubElement(networks_elem, "network")
+    mgmt_net.set("id",         str(MGMT_NET_ID))
+    mgmt_net.set("type",       "bridge")
+    mgmt_net.set("name",       "Management")
+    mgmt_net.set("left",       "400")
+    mgmt_net.set("top",        "50")
+    mgmt_net.set("visibility", "1")
+
     # Build network map from links
     # Each link becomes a bridge network connecting two interfaces
-    net_id = 1
+    net_id = MGMT_NET_ID + 1
     net_map = {}   # (node_name, iface) -> network_id
     labels  = []   # (text, canvas_x, canvas_y) for each link label
     for link in links:
@@ -134,19 +150,6 @@ def build_unl_xml(lab, nodes, links):
         net_id += 1
 
     labels = place_labels(labels)
-
-    # Management network — pnet0 bridges devices to the GCP VM (192.168.0.0/24).
-    # This is what allows SSH from the GCP VM to each device's mgmt interface.
-    # Numbered sequentially after the link networks — EVE-NG rejects id 0
-    # (means "disconnected") and mishandles out-of-sequence ids.
-    MGMT_NET_ID = net_id
-    mgmt_net = SubElement(networks_elem, "network")
-    mgmt_net.set("id",         str(MGMT_NET_ID))
-    mgmt_net.set("type",       "pnet0")
-    mgmt_net.set("name",       "Management")
-    mgmt_net.set("left",       "400")
-    mgmt_net.set("top",        "50")
-    mgmt_net.set("visibility", "1")
 
     # Add nodes with calculated positions
     for node in nodes:
@@ -182,7 +185,7 @@ def build_unl_xml(lab, nodes, links):
             iface_elem.set("name", iface_name.capitalize())
             iface_elem.set("type", "ethernet")
             if iface_idx == mgmt_iface:
-                # Connect management interface to pnet0 (GCP VM bridge)
+                # Connect management interface to the Management bridge
                 iface_elem.set("network_id", str(MGMT_NET_ID))
             elif iface_key in net_map:
                 iface_elem.set("network_id", str(net_map[iface_key]))
@@ -332,6 +335,20 @@ def main(topology_file):
     nodes_resp = s.get(f"http://192.168.0.1/api/labs/{lab['name']}.unl/nodes")
     node_count = len(nodes_resp.json().get("data", {}))
     print(f"  {node_count} nodes in lab.")
+
+    # EVE creates the Management bridge (vnet0_1) when nodes start; give the
+    # host its IP on it and bring it up so SSH can reach the devices.
+    mgmt_host_ip = topo["eve_ng"]["host"]
+    print(f"\n  Attaching {mgmt_host_ip}/24 to {MGMT_BRIDGE}...")
+    for _ in range(10):
+        if os.system(f"ip link show {MGMT_BRIDGE} >/dev/null 2>&1") == 0:
+            os.system(f"sudo ip addr replace {mgmt_host_ip}/24 dev {MGMT_BRIDGE}")
+            os.system(f"sudo ip link set {MGMT_BRIDGE} up")
+            print(f"  {MGMT_BRIDGE} is up with {mgmt_host_ip}/24")
+            break
+        time.sleep(3)
+    else:
+        print(f"  WARNING: {MGMT_BRIDGE} never appeared — mgmt SSH will fail")
 
     # Wait for boot — startup-configs are applied by EVE-NG during boot
     print("\n  Waiting 90 seconds for devices to boot with startup-configs...")
