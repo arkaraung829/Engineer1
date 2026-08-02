@@ -86,10 +86,11 @@ def build_unl_xml(lab, nodes, links):
     networks_elem = SubElement(topology, "networks")
 
     # Management network — pnet0 bridges devices to the GCP VM (192.168.0.0/24)
-    # This is what allows SSH from the GCP VM to each device's mgmt interface
-    MGMT_NET_ID = 0
+    # This is what allows SSH from the GCP VM to each device's mgmt interface.
+    # Must NOT be id 0: EVE-NG treats network_id=0 as "interface disconnected".
+    MGMT_NET_ID = 100
     mgmt_net = SubElement(networks_elem, "network")
-    mgmt_net.set("id",         "0")
+    mgmt_net.set("id",         str(MGMT_NET_ID))
     mgmt_net.set("type",       "pnet0")
     mgmt_net.set("name",       "Management")
     mgmt_net.set("left",       "400")
