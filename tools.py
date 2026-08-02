@@ -14,10 +14,14 @@ import paramiko
 # Flip to True to use the fake Cisco device instead of real SSH
 USE_SIMULATOR = False
 
-# Jump host = your GCP VM (the bridge between your Mac and EVE-NG devices)
-JUMP_HOST = "34.41.103.220"
-JUMP_USER = "ayethandaraung"
-JUMP_KEY  = "/Users/ayethandaraung/.ssh/google_compute_engine"
+# Optional jump host — only needed when running the agent from OUTSIDE the
+# lab (e.g. your Mac): set JUMP_HOST to the GCP VM's current external IP.
+# When the agent runs on the EVE-NG VM itself, leave JUMP_HOST unset and
+# devices are reached directly. (GCP external IPs change on VM restart —
+# never hardcode one here.)
+JUMP_HOST = os.environ.get("JUMP_HOST", "")
+JUMP_USER = os.environ.get("JUMP_USER", "ayethandaraung")
+JUMP_KEY  = os.path.expanduser("~/.ssh/google_compute_engine")
 
 # Default credentials for EVE-NG lab devices
 DEFAULT_USERNAME = "cisco"
@@ -69,14 +73,9 @@ def ssh_exec(host: str, command: str) -> str:
         print(f"  [OUTPUT PREVIEW] {result.strip()[:120]}...")
         return result
 
-    # Real device via jump host
+    # Real device — direct SSH, or through the jump host if one is set
     try:
         from netmiko import ConnectHandler
-
-        print(f"\n  [SSH] {JUMP_HOST} → {host}> {command}")
-
-        # Open channel through GCP VM to reach device inside EVE-NG
-        channel = _open_jump_channel(host)
 
         device = {
             "device_type": "cisco_ios",
@@ -84,8 +83,14 @@ def ssh_exec(host: str, command: str) -> str:
             "username": DEFAULT_USERNAME,
             "password": DEFAULT_PASSWORD,
             "secret":   DEFAULT_ENABLE,
-            "sock":     channel,          # use the jump channel instead of direct TCP
+            "timeout":  20,
         }
+
+        if JUMP_HOST:
+            print(f"\n  [SSH] {JUMP_HOST} → {host}> {command}")
+            device["sock"] = _open_jump_channel(host)
+        else:
+            print(f"\n  [SSH] {host}> {command}")
 
         with ConnectHandler(**device) as connection:
             connection.enable()           # enter enable mode
@@ -94,7 +99,8 @@ def ssh_exec(host: str, command: str) -> str:
         return output
 
     except Exception as error:
-        return f"ERROR connecting to {host} via {JUMP_HOST}: {str(error)}"
+        via = f" via {JUMP_HOST}" if JUMP_HOST else ""
+        return f"ERROR connecting to {host}{via}: {str(error)}"
 
 
 def save_report(content: str, filename: str = "") -> str:
