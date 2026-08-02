@@ -4,6 +4,7 @@
 
 import simulator
 import os
+import sys
 from datetime import datetime
 import paramiko
 
@@ -11,8 +12,15 @@ import paramiko
 # CONFIGURATION
 # ─────────────────────────────────────────────
 
-# Flip to True to use the fake Cisco device instead of real SSH
-USE_SIMULATOR = False
+# Set env var USE_SIMULATOR=true to use the fake Cisco device instead of
+# real SSH (demo without a lab). Defaults to real devices.
+USE_SIMULATOR = os.environ.get("USE_SIMULATOR", "false").lower() in ("1", "true", "yes")
+
+
+def _log(msg: str):
+    """Progress output. Goes to stderr — stdout must stay clean because
+    MCP stdio clients (Claude Desktop) speak JSON-RPC over stdout."""
+    print(msg, file=sys.stderr)
 
 # Optional jump host — only needed when running the agent from OUTSIDE the
 # lab (e.g. your Mac): set JUMP_HOST to the GCP VM's current external IP.
@@ -68,9 +76,9 @@ def ssh_exec(host: str, command: str) -> str:
     """
 
     if USE_SIMULATOR:
-        print(f"\n  [SSH] {host}> {command}")
+        _log(f"\n  [SSH] {host}> {command}")
         result = simulator.get_response(command)
-        print(f"  [OUTPUT PREVIEW] {result.strip()[:120]}...")
+        _log(f"  [OUTPUT PREVIEW] {result.strip()[:120]}...")
         return result
 
     # Real device — direct SSH, or through the jump host if one is set
@@ -87,10 +95,10 @@ def ssh_exec(host: str, command: str) -> str:
         }
 
         if JUMP_HOST:
-            print(f"\n  [SSH] {JUMP_HOST} → {host}> {command}")
+            _log(f"\n  [SSH] {JUMP_HOST} → {host}> {command}")
             device["sock"] = _open_jump_channel(host)
         else:
-            print(f"\n  [SSH] {host}> {command}")
+            _log(f"\n  [SSH] {host}> {command}")
 
         with ConnectHandler(**device) as connection:
             connection.enable()           # enter enable mode
@@ -129,5 +137,5 @@ def save_report(content: str, filename: str = "") -> str:
     with open(filepath, "w") as file:
         file.write(content)
 
-    print(f"\n  [REPORT] Saved to: {filepath}")
+    _log(f"\n  [REPORT] Saved to: {filepath}")
     return f"Report saved to: {filepath}"

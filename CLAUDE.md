@@ -20,8 +20,9 @@ python agent.py                   # run the agent
 | `AI-AGENT-ARCHITECTURE.md` | Architecture study guide |
 
 ## Simulator vs Real Device
-- `USE_SIMULATOR = True` in `tools.py` → uses fake device (safe for demo)
-- `USE_SIMULATOR = False` → connects to real Cisco device via SSH
+- env var `USE_SIMULATOR=true` → uses fake device (safe for demo)
+- unset (default) → connects to real Cisco devices via SSH
+- env var `JUMP_HOST=<gcp-vm-ip>` → tunnel device SSH through the GCP VM (when running from the Mac)
 
 ## Environment Variable Required
 ```bash

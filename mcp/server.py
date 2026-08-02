@@ -62,8 +62,9 @@ def write_report(content: str, filename: str = "") -> str:
 # START THE SERVER
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    print("network-ops MCP server starting...")
-    print("Tools available: run_ssh, write_report")
-    print("Connect your Claude Desktop or agent to this server.")
-    print("Press Ctrl+C to stop.\n")
+    # Startup messages must go to stderr: stdio MCP clients (Claude
+    # Desktop) speak JSON-RPC over stdout, and any stray print there
+    # corrupts the protocol handshake.
+    print("network-ops MCP server starting (stdio)...", file=sys.stderr)
+    print("Tools available: run_ssh, write_report", file=sys.stderr)
     mcp.run()
