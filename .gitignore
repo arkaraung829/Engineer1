@@ -15,5 +15,3 @@ memory/conversation.json
 # Mac
 .DS_Store
 
-# Deploy folder has no jump host config — keep it but not secrets
-deploy/

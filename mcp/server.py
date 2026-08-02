@@ -73,6 +73,13 @@ LAB_LOG = "/tmp/network-lab-lifecycle.log"
 SCRIPT_ENV = {**os.environ,
               "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"}
 
+# Lifecycle tools need the repo scripts + gcloud, which exist on the Mac
+# but not on the GCP VM copy of this server — register them only where
+# they can actually work.
+LIFECYCLE_AVAILABLE = os.path.exists(
+    os.path.join(REPO_ROOT, "scripts", "lab-up.sh"))
+lifecycle_tool = mcp.tool() if LIFECYCLE_AVAILABLE else (lambda f: f)
+
 
 def _run_script_in_background(script: str) -> None:
     log = open(LAB_LOG, "w")
@@ -82,7 +89,7 @@ def _run_script_in_background(script: str) -> None:
     )
 
 
-@mcp.tool()
+@lifecycle_tool
 def lab_up() -> str:
     """
     Start the GCP VM and boot the whole EVE-NG lab (4 Cisco devices).
@@ -96,7 +103,7 @@ def lab_up() -> str:
             "code sync, device boot). Call lab_status() to check progress.")
 
 
-@mcp.tool()
+@lifecycle_tool
 def lab_down() -> str:
     """
     Gracefully shut the lab down: stops the Cisco devices first (saves
@@ -108,7 +115,7 @@ def lab_down() -> str:
             "Call lab_status() to confirm.")
 
 
-@mcp.tool()
+@lifecycle_tool
 def lab_status() -> str:
     """
     Report the REAL lab state: GCP VM status and external IP, whether
@@ -170,6 +177,16 @@ if __name__ == "__main__":
     # Startup messages must go to stderr: stdio MCP clients (Claude
     # Desktop) speak JSON-RPC over stdout, and any stray print there
     # corrupts the protocol handshake.
-    print("network-ops MCP server starting (stdio)...", file=sys.stderr)
-    print("Tools available: run_ssh, write_report", file=sys.stderr)
-    mcp.run()
+    #
+    # Transports:
+    #   default        — stdio, for a local Claude Desktop/Code client
+    #   MCP_TRANSPORT=http — shared HTTP server (used by the systemd
+    #   service on the GCP VM; engineers reach it via an SSH tunnel)
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    print(f"network-ops MCP server starting ({transport})...", file=sys.stderr)
+    if transport == "http":
+        mcp.run(transport="http",
+                host=os.environ.get("MCP_HOST", "127.0.0.1"),
+                port=int(os.environ.get("MCP_PORT", "8000")))
+    else:
+        mcp.run()
