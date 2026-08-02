@@ -6,7 +6,10 @@ hostname SW2
 no ip domain-lookup
 cdp run
 !
-! VLANs
+! VLANs — vtp transparent so vlan commands in startup-config apply at boot
+! (in vtp server mode, VLANs live in vlan.dat and these lines are ignored)
+vtp mode transparent
+!
 vlan 10
  name Servers
 vlan 20
