@@ -146,7 +146,7 @@ def build_unl_xml(lab, nodes, links):
             t.set("type", "text")
             data_elem = SubElement(t, "data")
             data_elem.text = (
-                f'<div style="top:{ly - 18}px;left:{lx}px;z-index:1000;">'
+                f'<div id="customText{idx}" style="top:{ly - 18}px;left:{lx}px;z-index:1000;">'
                 f'<p style="color:#000000;font-weight:bold;'
                 f'background-color:transparent;font-size:14px;">'
                 f'{text}</p></div>'
