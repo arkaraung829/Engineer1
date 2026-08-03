@@ -1,0 +1,54 @@
+name: CI
+
+# Runs on GitHub's runner — no lab/VM needed. Catches the classes of bug
+# we hit by hand: import breakage, MCP protocol/stdout issues, shell typos.
+# (There is intentionally no auto-deploy job: the GCP VM's IP is ephemeral
+#  and the VM is often stopped, so code is deployed at lab-up time by
+#  scripts/lab-up.sh, not on push.)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install fastmcp netmiko paramiko pyyaml anthropic
+
+      - name: Compile all Python (syntax check)
+        run: python -m py_compile agent.py tools.py mcp/server.py topology/build-topology.py
+
+      - name: Import tools module (catches import breakage)
+        run: python -c "import tools; print('tools imports OK')"
+
+      - name: Shell script syntax
+        run: bash -n startup.sh scripts/lab-up.sh scripts/lab-down.sh scripts/sync-reports.sh
+
+      - name: MCP server smoke test (initialize handshake)
+        run: |
+          python - <<'EOF'
+          import subprocess, json, sys
+          p = subprocess.Popen(
+              [sys.executable, "mcp/server.py"],
+              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+              stderr=subprocess.DEVNULL, text=True)
+          p.stdin.write(json.dumps({
+              "jsonrpc": "2.0", "id": 1, "method": "initialize",
+              "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                         "clientInfo": {"name": "ci", "version": "1"}}}) + "\n")
+          p.stdin.flush()
+          resp = json.loads(p.stdout.readline())
+          p.terminate()
+          name = resp.get("result", {}).get("serverInfo", {}).get("name")
+          assert name == "network-ops", f"unexpected server: {name}"
+          print("MCP handshake OK")
+          EOF
