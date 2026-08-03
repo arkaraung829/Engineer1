@@ -30,6 +30,9 @@ jobs:
       - name: Import tools module (catches import breakage)
         run: python -c "import tools; print('tools imports OK')"
 
+      - name: Validate topology (generates lab XML, no VM needed)
+        run: python topology/validate.py
+
       - name: Shell script syntax
         run: bash -n startup.sh scripts/lab-up.sh scripts/lab-down.sh scripts/sync-reports.sh
 
