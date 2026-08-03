@@ -14,7 +14,7 @@
 #       tools.py        ← same functions agent.py uses
 #           │
 #           ▼
-#       Cisco devices / simulator
+#       Cisco devices (EVE-NG lab)
 
 import sys
 import os

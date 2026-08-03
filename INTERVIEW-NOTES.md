@@ -39,7 +39,7 @@ executes them."** Read-only show commands; humans apply fixes.
                               tools.py — THE enforcement point
 ```
 
-- `tools.py` is the single place for credentials, simulator switch,
+- `tools.py` is the single place for credentials,
   jump-host logic, timeouts. Add an allowlist or audit log once — every
   consumer inherits it.
 - The MCP server is deliberately thin: protocol adapter, no logic.

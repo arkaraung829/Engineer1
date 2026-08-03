@@ -15,14 +15,12 @@ python agent.py                   # run the agent
 |---|---|
 | `agent.py` | Main script — entry point, runs everything |
 | `tools.py` | ssh_exec() function — runs commands on devices |
-| `simulator.py` | Fake Cisco device — for demo without real hardware |
 | `prompts/network-agent.md` | Claude's instructions (goals + rules) |
 | `AI-AGENT-ARCHITECTURE.md` | Architecture study guide |
 
 ## Simulator vs Real Device
-- env var `USE_SIMULATOR=true` → uses fake device (safe for demo)
-- unset (default) → connects to real Cisco devices via SSH
-- env var `JUMP_HOST=<gcp-vm-ip>` → tunnel device SSH through the GCP VM (when running from the Mac)
+- Agent runs ON the GCP VM → connects to devices directly
+- Running from the Mac → set `JUMP_HOST=<gcp-vm-ip>` to tunnel device SSH through the GCP VM
 
 ## Environment Variable Required
 ```bash

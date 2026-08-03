@@ -2,7 +2,6 @@
 # These are the functions Claude can call to interact with network devices.
 # Claude never runs commands directly — it asks us to run them, and we return the results.
 
-import simulator
 import os
 import sys
 from datetime import datetime
@@ -11,10 +10,6 @@ import paramiko
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-
-# Set env var USE_SIMULATOR=true to use the fake Cisco device instead of
-# real SSH (demo without a lab). Defaults to real devices.
-USE_SIMULATOR = os.environ.get("USE_SIMULATOR", "false").lower() in ("1", "true", "yes")
 
 
 def _log(msg: str):
@@ -72,14 +67,8 @@ def ssh_exec(host: str, command: str) -> str:
         command — the IOS command to run (e.g. "show ip bgp summary")
 
     Returns:
-        The raw text output from the device (or simulator)
+        The raw text output from the device
     """
-
-    if USE_SIMULATOR:
-        _log(f"\n  [SSH] {host}> {command}")
-        result = simulator.get_response(command)
-        _log(f"  [OUTPUT PREVIEW] {result.strip()[:120]}...")
-        return result
 
     # Real device — direct SSH, or through the jump host if one is set
     try:
